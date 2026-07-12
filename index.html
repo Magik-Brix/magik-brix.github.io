@@ -873,19 +873,63 @@
     showToast('Colours changed!');
   }
 
-  function saveAsPicture(){
+  async function saveAsPicture(){
     const cellPx = 24;
-    const size = gridSize * cellPx;
-    const out = document.createElement('canvas');
-    out.width = size; out.height = size;
-    const octx = out.getContext('2d');
+    const gridPx = gridSize * cellPx;
     const dark = isDarkTheme();
+
+    const counts = {};
+    for(const color of cells){
+      if(!color) continue;
+      counts[color] = (counts[color]||0) + 1;
+    }
+    const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    const total = entries.reduce((sum,[,c])=>sum+c, 0);
+
+    const measureCanvas = document.createElement('canvas');
+    const mctx = measureCanvas.getContext('2d');
+    const chipFont = '600 15px "Quicksand","Segoe UI",sans-serif';
+    mctx.font = chipFont;
+
+    const chips = entries.map(([hex,count])=>{
+      const found = PALETTE.find(p=>p.hex.toLowerCase()===hex.toLowerCase());
+      const name = found ? found.name : 'Custom';
+      const label = name + ': ' + count;
+      return { hex, label, w: 18 + mctx.measureText(label).width + 24 };
+    });
+
+    const padX = 20, chipH = 26, chipGapY = 10;
+    const canvasWidth = Math.max(gridPx, 360);
+    const rows = [[]];
+    let rowWidth = 0;
+    chips.forEach(chip=>{
+      if(rowWidth + chip.w > canvasWidth - padX*2 && rows[rows.length-1].length){
+        rows.push([]);
+        rowWidth = 0;
+      }
+      rows[rows.length-1].push(chip);
+      rowWidth += chip.w;
+    });
+
+    const tallyTop = gridPx + 20;
+    const tallyRowsHeight = chips.length ? rows.length * (chipH + chipGapY) : chipH + chipGapY;
+    const totalLineHeight = total ? 26 : 0;
+    const canvasHeight = tallyTop + 20 + tallyRowsHeight + totalLineHeight + 16;
+
+    const out = document.createElement('canvas');
+    out.width = canvasWidth; out.height = canvasHeight;
+    const octx = out.getContext('2d');
+
+    octx.fillStyle = dark ? '#17212B' : '#EDF2EE';
+    octx.fillRect(0,0,canvasWidth,canvasHeight);
+
+    const gridOffsetX = Math.round((canvasWidth - gridPx) / 2);
     octx.fillStyle = dark ? '#223140' : '#D8E4DC';
-    octx.fillRect(0,0,size,size);
+    octx.fillRect(gridOffsetX,0,gridPx,gridPx);
 
     for(let r=0;r<gridSize;r++){
       for(let c=0;c<gridSize;c++){
-        const x = c*cellPx, y = r*cellPx;
+        const x = gridOffsetX + c*cellPx, y = r*cellPx;
         const color = cells[idx(r,c)];
         if(!color){
           octx.beginPath();
@@ -920,11 +964,58 @@
       }
     }
 
-    const link = document.createElement('a');
-    link.download = 'magik-brix-design.png';
-    link.href = out.toDataURL('image/png');
-    link.click();
-    showToast('Saved!');
+    const textColor = dark ? '#EAF1F2' : '#22303B';
+    const softColor = dark ? '#A9BAC2' : '#57696E';
+    let ty = tallyTop + 20;
+    octx.textBaseline = 'middle';
+    octx.font = chipFont;
+
+    if(!chips.length){
+      octx.fillStyle = softColor;
+      octx.fillText('No bricks placed yet.', padX, ty + chipH/2);
+      ty += chipH + chipGapY;
+    } else {
+      rows.forEach(row=>{
+        let tx = padX;
+        row.forEach(chip=>{
+          octx.beginPath();
+          octx.arc(tx+7, ty+chipH/2, 7, 0, Math.PI*2);
+          octx.fillStyle = chip.hex;
+          octx.fill();
+          octx.strokeStyle = 'rgba(0,0,0,0.15)';
+          octx.lineWidth = 1;
+          octx.stroke();
+          octx.fillStyle = textColor;
+          octx.fillText(chip.label, tx+22, ty+chipH/2);
+          tx += chip.w;
+        });
+        ty += chipH + chipGapY;
+      });
+    }
+
+    if(total){
+      octx.font = '700 15px "Quicksand","Segoe UI",sans-serif';
+      octx.fillStyle = textColor;
+      octx.fillText('Total bricks: ' + total, padX, ty + totalLineHeight/2 - 2);
+    }
+
+    out.toBlob(async function(blob){
+      const file = new File([blob], 'magik-brix-design.png', {type:'image/png'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{
+          await navigator.share({files:[file], title:'Magik Brix design'});
+          showToast('Saved!');
+          return;
+        }catch(err){
+          if(err && err.name === 'AbortError') return;
+        }
+      }
+      const link = document.createElement('a');
+      link.download = 'magik-brix-design.png';
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      showToast('Saved!');
+    }, 'image/png');
   }
 
   document.querySelectorAll('.tool-btn').forEach(b=>{
