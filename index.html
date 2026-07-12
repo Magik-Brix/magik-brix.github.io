@@ -873,7 +873,7 @@
     showToast('Colours changed!');
   }
 
-  async function saveAsPicture(){
+  function saveAsPicture(){
     const cellPx = 24;
     const gridPx = gridSize * cellPx;
     const dark = isDarkTheme();
@@ -999,23 +999,11 @@
       octx.fillText('Total bricks: ' + total, padX, ty + totalLineHeight/2 - 2);
     }
 
-    out.toBlob(async function(blob){
-      const file = new File([blob], 'magik-brix-design.png', {type:'image/png'});
-      if(navigator.canShare && navigator.canShare({files:[file]})){
-        try{
-          await navigator.share({files:[file], title:'Magik Brix design'});
-          showToast('Saved!');
-          return;
-        }catch(err){
-          if(err && err.name === 'AbortError') return;
-        }
-      }
-      const link = document.createElement('a');
-      link.download = 'magik-brix-design.png';
-      link.href = URL.createObjectURL(blob);
-      link.click();
-      showToast('Saved!');
-    }, 'image/png');
+    const link = document.createElement('a');
+    link.download = 'magik-brix-design.png';
+    link.href = out.toDataURL('image/png');
+    link.click();
+    showToast('Saved!');
   }
 
   document.querySelectorAll('.tool-btn').forEach(b=>{
