@@ -173,7 +173,7 @@
   <div class="workspace">
     <div class="panel toolbox">
       <section>
-        <label class="field-label" for="magicInput">Magic brick maker</label>
+        <label class="field-label" for="magicInput">Magik Brix Maker</label>
         <div class="maker-row">
           <input type="text" id="magicInput" maxlength="24" placeholder="Tilly" autocomplete="off">
           <button class="btn-primary" id="convertBtn">Turn into Bricks!</button>
@@ -181,13 +181,12 @@
       </section>
 
       <section>
-        <label class="field-label">Brick colours</label>
-        <div class="swatches" id="swatches"></div>
-        <div class="custom-swatch-row">
-          <div class="custom-swatch" title="Any colour you can think of">
-            <input type="color" id="customColor" value="#e63946">
-          </div>
-          <span class="custom-swatch-label">Custom colour</span>
+        <button class="action-btn" id="toggleAllEmoji" style="width:100%;" aria-expanded="false">Browse all emoji</button>
+        <div class="emoji-shelf" id="emojiShelf" style="margin-top:10px;"></div>
+        <p class="hint">Tip: press <strong>Windows key + .</strong> to open your emoji keyboard and pick absolutely anything.</p>
+        <div id="allEmojiPanel" style="display:none; margin-top:10px;">
+          <div class="tool-row" id="emojiCategoryTabs" style="flex-wrap:wrap; gap:6px;"></div>
+          <div class="emoji-shelf" id="allEmojiGrid" style="grid-template-columns:repeat(7,1fr); max-height:220px; overflow-y:auto; margin-top:8px; padding-right:2px;"></div>
         </div>
       </section>
 
@@ -213,19 +212,20 @@
 
       <section>
         <div class="action-row">
-          <button class="action-btn" id="undoBtn">↺ Undo</button>
-          <button class="action-btn" id="clearBtn">✕ Clear</button>
-          <button class="action-btn" id="colourChangeBtn">🔀 Colour Change</button>
+          <button class="action-btn" id="undoBtn">Undo</button>
+          <button class="action-btn" id="clearBtn">Clear</button>
+          <button class="action-btn" id="colourChangeBtn">Colour Change</button>
         </div>
       </section>
 
       <section>
-        <button class="action-btn" id="toggleAllEmoji" style="width:100%;" aria-expanded="false">Browse all emoji</button>
-        <div class="emoji-shelf" id="emojiShelf" style="margin-top:10px;"></div>
-        <p class="hint">Tip: press <strong>Windows key + .</strong> to open your emoji keyboard and pick absolutely anything.</p>
-        <div id="allEmojiPanel" style="display:none; margin-top:10px;">
-          <div class="tool-row" id="emojiCategoryTabs" style="flex-wrap:wrap; gap:6px;"></div>
-          <div class="emoji-shelf" id="allEmojiGrid" style="grid-template-columns:repeat(7,1fr); max-height:220px; overflow-y:auto; margin-top:8px; padding-right:2px;"></div>
+        <label class="field-label">Brick colours</label>
+        <div class="swatches" id="swatches"></div>
+        <div class="custom-swatch-row">
+          <div class="custom-swatch" title="Any colour you can think of">
+            <input type="color" id="customColor" value="#e63946">
+          </div>
+          <span class="custom-swatch-label">Custom colour</span>
         </div>
       </section>
     </div>
@@ -851,13 +851,23 @@
   }
 
   function randomizeColours(){
-    if(!cells.some(c=>c)){
+    const uniqueColors = [...new Set(cells.filter(c=>c))];
+    if(!uniqueColors.length){
       showToast('Nothing to recolour yet!');
       return;
     }
     pushHistory();
+
+    const pool = PALETTE.map(p=>p.hex).filter(hex=>!uniqueColors.some(u=>u.toLowerCase()===hex.toLowerCase()));
+    for(let i=pool.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [pool[i],pool[j]] = [pool[j],pool[i]];
+    }
+    const colorMap = {};
+    uniqueColors.forEach((hex,i)=>{ colorMap[hex] = pool[i % pool.length]; });
+
     for(let i=0;i<cells.length;i++){
-      if(cells[i]) cells[i] = PALETTE[Math.floor(Math.random()*PALETTE.length)].hex;
+      if(cells[i]) cells[i] = colorMap[cells[i]];
     }
     draw(); updateTally(); playClick();
     showToast('Colours changed!');
