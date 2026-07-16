@@ -157,6 +157,22 @@
   .toast.show{opacity:1; transform:translate(-50%,0);}
 
   footer{text-align:center; color:var(--ink-soft); font-size:.82rem; margin-top:34px;}
+  .footer-link{color:var(--ink-soft); text-decoration:underline;}
+  .affiliate-disclosure{
+    font-size:.72rem; color:var(--ink-soft); text-align:center;
+    max-width:420px; margin:6px auto 0; line-height:1.4;
+  }
+  #privacyDialog{
+    max-width:440px; width:90%; border:1px solid var(--line); border-radius:14px;
+    padding:20px 22px; background:var(--bg-alt); color:var(--ink);
+    box-shadow:0 12px 34px rgba(0,0,0,0.25);
+  }
+  #privacyDialog::backdrop{background:rgba(0,0,0,0.45);}
+  #privacyDialog h2{font-size:1rem; margin:14px 0 6px;}
+  #privacyDialog h2:first-child{margin-top:0;}
+  #privacyDialog p{font-size:.86rem; line-height:1.5; margin:0 0 10px;}
+  #privacyDialog .hint{color:var(--ink-soft); font-size:.78rem;}
+  #privacyDialog .btn-primary{margin-top:6px;}
 
   @media (prefers-reduced-motion:reduce){
     *{transition:none !important;}
@@ -238,6 +254,7 @@
         <button class="btn-primary" id="saveBtn">⬇ Save my picture</button>
         <a class="btn-primary" id="buyNowBtn" href="https://www.amazon.co.uk/Bizak-Building-Stencils-Connectors-64008003/dp/B0C66K5L59?crid=3HLIO70NOUCXH&dib=eyJ2IjoiMSJ9.cjIQ2Et5eK_0mbNvUjU9zS5QoCTPNsbtVdcfeTfW_UB5NRDmrVNARxSDVAhjLfKkjV3umsVuCGT20FtiiDIbFOxMSkAXgXQGNTk2-PqxTd2snQVVKSB2eg-xZVJ_Uu2alaBBcbjqfKP35AP4D9ysfj0717QRusPkVn1aEFkxvFvtSt2uKBGIrnRA5DB_yrzbGxaIuoTSuiuvrUmZEq1W1RJrGrjJrXKVq2cU5ExJZlZyt47ym6JWNvYrWH8CpxTNZptc4cJyd0_wb45q0Nngl8CYPljMNVjJT5t4AGkvB3Y.iQGeOZsYw4ee6pf7wfnTJEg5zsn2sVO-JjsBJDh6O28&dib_tag=se&keywords=sim+brix&qid=1783897875&sprefix=sim+brix%2Caps%2C170&sr=8-4&linkCode=ll2&tag=0902830c-21&linkId=a78cb9e5e80dbcf9c91a946616da8783&ref_=as_li_ss_tl" target="_blank" rel="noopener noreferrer" style="text-decoration:none; display:inline-flex; align-items:center;">🛒 Buy Now</a>
       </div>
+      <p class="affiliate-disclosure">🛒 Buy Now leaves this site and goes to Amazon.co.uk. As an Amazon Associate, this site earns a small commission from qualifying purchases — at no extra cost to you.</p>
       <div style="width:100%;">
         <label class="field-label">Bricks you'll need</label>
         <div class="brick-list" id="brickList"></div>
@@ -246,8 +263,18 @@
     </div>
   </div>
 
-  <footer>© 2026 Tilly · Built with Claude, for Tilly.</footer>
+  <footer>© 2026 Tilly · Built with Claude, for Tilly. · <a href="#" id="privacyLink" class="footer-link">🔒 Privacy &amp; Amazon links</a></footer>
 </div>
+
+<dialog id="privacyDialog">
+  <h2>🔒 Privacy Notice</h2>
+  <p>Magik Brix doesn't collect any personal information. There's no login, no accounts, and nothing is sent to any server — everything you create stays on your own device until you choose to save it as a picture.</p>
+  <p>The only cookies or trackers on this page are whatever Amazon sets on <em>their own</em> site if you tap "Buy Now" — Magik Brix has no control over that once you leave here.</p>
+  <h2>🛒 About the Amazon link</h2>
+  <p>The "Buy Now" button is an Amazon Associates affiliate link. As an Amazon Associate, this site earns a small commission from qualifying purchases made through that link — this doesn't cost you anything extra, and it's the same price either way.</p>
+  <p class="hint">Since no personal data is collected here, there's nothing to request, change, or delete. Questions about this notice can go to whoever shared this app with you.</p>
+  <button class="btn-primary" id="privacyCloseBtn">Got it</button>
+</dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -1045,6 +1072,13 @@
   document.getElementById('clearBtn').addEventListener('click', clearGrid);
   document.getElementById('colourChangeBtn').addEventListener('click', randomizeColours);
   document.getElementById('saveBtn').addEventListener('click', saveAsPicture);
+  document.getElementById('privacyLink').addEventListener('click', (e)=>{
+    e.preventDefault();
+    document.getElementById('privacyDialog').showModal();
+  });
+  document.getElementById('privacyCloseBtn').addEventListener('click', ()=>{
+    document.getElementById('privacyDialog').close();
+  });
   document.getElementById('convertBtn').addEventListener('click', ()=> convertToBricks());
   magicInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') convertToBricks(); });
   customColorInput.addEventListener('input', ()=>{
