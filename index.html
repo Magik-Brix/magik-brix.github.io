@@ -135,7 +135,7 @@
     background:var(--tray); border-radius:26px; padding:16px;
     box-shadow:inset 0 2px 10px var(--shadow);
   }
-  canvas{display:block; border-radius:14px; touch-action:none; cursor:crosshair;}
+  canvas{display:block; border-radius:14px; touch-action:pan-y; cursor:crosshair;}
 
   .stage-controls{display:flex; gap:10px; flex-wrap:wrap; justify-content:center;}
 
@@ -813,9 +813,23 @@
     finishConversionFromCanvas(octx, NAME_MINT_HEX);
   }
 
+  const BLOCKED_WORDS = ['fuck','fucker','fucking','shit','shitty','bitch','ass','arse','asshole',
+    'bastard','crap','dick','piss','cock','pussy','cunt','slut','whore','fag','faggot',
+    'nigger','nigga','retard','damn','hell','twat','wanker','bollocks'];
+
+  function containsBlockedWord(text){
+    const words = text.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+    return words.some(w => BLOCKED_WORDS.includes(w));
+  }
+
   function convertToBricks(rawInput){
     const input = (rawInput !== undefined ? rawInput : magicInput.value).trim();
     if(!input) return;
+    if(containsBlockedWord(input)){
+      showToast('Try a different word!');
+      magicInput.value = '';
+      return;
+    }
     pushHistory();
 
     const directEmoji = /\p{Extended_Pictographic}/u.test(input);
@@ -836,16 +850,25 @@
   }
 
   function resizeGrid(newSize){
+    const oldSize = gridSize;
+    const oldCells = cells;
+    const newCells = new Array(newSize*newSize).fill(null);
+    for(let r=0;r<newSize;r++){
+      for(let c=0;c<newSize;c++){
+        const oldR = Math.min(oldSize-1, Math.floor(r*oldSize/newSize));
+        const oldC = Math.min(oldSize-1, Math.floor(c*oldSize/newSize));
+        newCells[r*newSize+c] = oldCells[oldR*oldSize+oldC];
+      }
+    }
     gridSize = newSize;
-    cells = new Array(gridSize*gridSize).fill(null);
+    cells = newCells;
     history = [];
-    outlineHex = null;
     document.querySelectorAll('.size-btn').forEach(b=>{
       b.setAttribute('aria-pressed', Number(b.dataset.size) === newSize ? 'true' : 'false');
     });
     layoutCanvas();
     updateTally();
-    showToast('New baseplate ready!');
+    showToast('Resized!');
   }
 
   function clearGrid(){
