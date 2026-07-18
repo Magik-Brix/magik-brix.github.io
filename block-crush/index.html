@@ -45,11 +45,21 @@
     overflow: hidden; margin: 10px 2px 0; }
   .level-progress-fill { height: 100%; background: var(--accent); border-radius: 999px; width: 0%; transition: width 0.3s ease; }
 
-  .level-up-toast { position: fixed; top: 14%; left: 50%; transform: translate(-50%, -20px); background: var(--accent);
-    color: #fff; font-weight: 900; font-size: 1.15rem; padding: 14px 26px; border-radius: 16px; box-shadow: var(--shadow);
-    z-index: 90; opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease; text-align: center; pointer-events: none; }
-  .level-up-toast.show { opacity: 1; transform: translate(-50%, 0); }
-  .level-up-toast .sub { display: block; font-size: 0.7rem; font-weight: 700; opacity: 0.85; margin-top: 2px; }
+  #celebCanvas { position: fixed; inset: 0; z-index: 91; pointer-events: none; }
+
+  .level-complete-overlay { position: fixed; inset: 0; background: rgba(8,6,16,0.55); display: flex; align-items: center;
+    justify-content: center; z-index: 92; padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+  .level-complete-overlay.show { opacity: 1; pointer-events: auto; }
+  .level-complete-card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 30px 26px;
+    text-align: center; max-width: 340px; width: 100%; box-shadow: var(--shadow); transform: scale(0.85); transition: transform 0.3s cubic-bezier(.34,1.56,.64,1); }
+  .level-complete-overlay.show .level-complete-card { transform: scale(1); }
+  .level-complete-card .lc-level { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+  .level-complete-card .lc-message { font-size: 1.7rem; font-weight: 900; margin: 6px 0 18px; }
+  .level-complete-card button { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 13px;
+    padding: 14px; font-size: 0.95rem; font-weight: 800; cursor: pointer; font-family: inherit; }
+  @media (prefers-reduced-motion: reduce) {
+    .level-complete-card { transition: none; } #celebCanvas { display: none; }
+  }
 
   .board-wrap { position: relative; margin: 14px auto 18px; }
   #board {
@@ -170,7 +180,14 @@
   </div>
 </div>
 
-<div class="level-up-toast" id="levelUpToast"></div>
+<canvas id="celebCanvas"></canvas>
+<div class="level-complete-overlay" id="levelCompleteOverlay">
+  <div class="level-complete-card">
+    <div class="lc-level" id="lcLevelLabel">Level 2</div>
+    <div class="lc-message" id="lcMessage">Well done!</div>
+    <button id="lcContinueBtn">Keep Playing</button>
+  </div>
+</div>
 
 <script>
 const GRID = 8;
@@ -314,7 +331,6 @@ let tray = []; // [{shape, color, id}, null, null]
 let score = 0;
 let best = Number(localStorage.getItem("blockCrushBest") || 0);
 const MAX_LEVEL = 200;
-const LEVEL_STEP = 120; // score points needed per level
 let currentLevel = 1;
 let dragState = null;
 
@@ -438,8 +454,17 @@ function spawnFloater(amount, r, c) {
   setTimeout(() => el.remove(), 900);
 }
 
+// Cumulative score needed to REACH a given level. Each level needs a bit more than the last,
+// so early levels come quickly but the climb gets longer as you go.
+function cumulativeForLevel(n) {
+  let cum = 0, step = 260;
+  for (let i = 1; i < n; i++) { cum += step; step += 35; }
+  return cum;
+}
 function levelForScore(s) {
-  return Math.min(MAX_LEVEL, Math.floor(s / LEVEL_STEP) + 1);
+  let level = 1;
+  while (level < MAX_LEVEL && s >= cumulativeForLevel(level + 1)) level++;
+  return level;
 }
 
 function updateScoreUI() {
@@ -450,24 +475,183 @@ function updateScoreUI() {
   const newLevel = levelForScore(score);
   if (newLevel > currentLevel) {
     currentLevel = newLevel;
-    showLevelUpToast(currentLevel);
+    celebrateLevel(currentLevel);
   }
   $("levelVal").textContent = currentLevel;
 
-  const intoLevel = score - (currentLevel - 1) * LEVEL_STEP;
-  const pct = currentLevel >= MAX_LEVEL ? 100 : Math.min(100, (intoLevel / LEVEL_STEP) * 100);
+  const base = cumulativeForLevel(currentLevel);
+  const step = currentLevel >= MAX_LEVEL ? 1 : cumulativeForLevel(currentLevel + 1) - base;
+  const pct = currentLevel >= MAX_LEVEL ? 100 : Math.min(100, ((score - base) / step) * 100);
   $("levelProgressFill").style.width = pct + "%";
 }
 
-let levelUpTimer = null;
-function showLevelUpToast(level) {
-  const toast = $("levelUpToast");
-  toast.innerHTML = level >= MAX_LEVEL
-    ? `Level ${level}! You reached the top! 🏆<span class="sub">Keep playing for an even bigger score</span>`
-    : `Level ${level}! 🎉`;
-  toast.classList.add("show");
-  clearTimeout(levelUpTimer);
-  levelUpTimer = setTimeout(() => toast.classList.remove("show"), 1400);
+// ---- Level-complete celebrations: a rotating pool of message + effect pairings ----
+const CELEBRATIONS = [
+  { message: "Well done!", type: "fireworks" },
+  { message: "Level Up!", type: "confetti" },
+  { message: "Amazing!", type: "starburst" },
+  { message: "You're on fire! 🔥", type: "sparkle" },
+  { message: "Fantastic!", type: "balloons" },
+  { message: "Incredible!", type: "rocket" },
+  { message: "Superstar!", type: "fireworks" },
+  { message: "Legend!", type: "confetti" },
+  { message: "Woohoo!", type: "starburst" },
+  { message: "Nailed it!", type: "sparkle" },
+];
+let celebrationBag = [];
+function pickCelebration() {
+  if (!celebrationBag.length) {
+    celebrationBag = CELEBRATIONS.map((_, i) => i);
+    for (let i = celebrationBag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [celebrationBag[i], celebrationBag[j]] = [celebrationBag[j], celebrationBag[i]];
+    }
+  }
+  return CELEBRATIONS[celebrationBag.pop()];
+}
+
+let celebAutoTimer = null;
+function celebrateLevel(level) {
+  const c = pickCelebration();
+  $("lcLevelLabel").textContent = level >= MAX_LEVEL ? "Top Level!" : `Level ${level}`;
+  $("lcMessage").textContent = level >= MAX_LEVEL ? "You reached Level 200! 🏆" : c.message;
+  $("levelCompleteOverlay").classList.add("show");
+  runCelebrationEffect(c.type);
+  clearTimeout(celebAutoTimer);
+  celebAutoTimer = setTimeout(dismissLevelComplete, 3200);
+}
+function dismissLevelComplete() {
+  clearTimeout(celebAutoTimer);
+  $("levelCompleteOverlay").classList.remove("show");
+}
+
+// ---- Particle celebration engine ----
+const celebCanvas = document.getElementById("celebCanvas");
+const celebCtx = celebCanvas.getContext("2d");
+let particles = [];
+let celebRunning = false;
+
+function resizeCelebCanvas() {
+  celebCanvas.width = window.innerWidth * devicePixelRatio;
+  celebCanvas.height = window.innerHeight * devicePixelRatio;
+  celebCanvas.style.width = window.innerWidth + "px";
+  celebCanvas.style.height = window.innerHeight + "px";
+  celebCtx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+window.addEventListener("resize", resizeCelebCanvas);
+resizeCelebCanvas();
+
+const CONFETTI_COLORS = ["#FF5D5D", "#FF9F43", "#FFD93D", "#6BCB77", "#4D96FF", "#9B5DE5", "#F15BB5", "#00C2CB"];
+
+function spawnBurst(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.3;
+    const speed = 2 + Math.random() * 4;
+    particles.push({
+      shape: "circle", x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      size: 3 + Math.random() * 3, color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+      life: 0, maxLife: 55 + Math.random() * 20, gravity: 0.09, fade: true,
+    });
+  }
+}
+
+function runCelebrationEffect(type) {
+  particles = [];
+  const w = window.innerWidth, h = window.innerHeight;
+
+  if (type === "fireworks") {
+    spawnBurst(w * 0.3, h * 0.35, 34);
+    setTimeout(() => spawnBurst(w * 0.7, h * 0.3, 34), 350);
+    setTimeout(() => spawnBurst(w * 0.5, h * 0.45, 40), 700);
+  } else if (type === "confetti") {
+    for (let i = 0; i < 90; i++) {
+      particles.push({
+        shape: "rect", x: Math.random() * w, y: -20 - Math.random() * h * 0.5,
+        vx: (Math.random() - 0.5) * 1.5, vy: 2 + Math.random() * 2.5,
+        size: 6 + Math.random() * 5, color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        rot: Math.random() * Math.PI, rotSpeed: (Math.random() - 0.5) * 0.2,
+        life: 0, maxLife: 220, gravity: 0.01, fade: false,
+      });
+    }
+  } else if (type === "starburst") {
+    spawnBurst(w * 0.5, h * 0.38, 46);
+  } else if (type === "sparkle") {
+    for (let i = 0; i < 70; i++) {
+      particles.push({
+        shape: "circle", x: Math.random() * w, y: Math.random() * h * 0.7,
+        vx: 0, vy: 0, size: 2 + Math.random() * 3,
+        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        life: Math.random() * 40, maxLife: 60 + Math.random() * 40, gravity: 0, fade: true, twinkle: true,
+      });
+    }
+  } else if (type === "balloons") {
+    for (let i = 0; i < 8; i++) {
+      particles.push({
+        shape: "emoji", text: "🎈", x: (w / 9) * (i + 1) + (Math.random() - 0.5) * 30, y: h + 40 + Math.random() * 100,
+        vx: 0, vy: -(1.4 + Math.random() * 1.2), size: 28 + Math.random() * 10,
+        life: 0, maxLife: 260, gravity: 0, fade: false, sway: Math.random() * Math.PI * 2,
+      });
+    }
+  } else if (type === "rocket") {
+    const rx = w * 0.5;
+    particles.push({
+      shape: "emoji", text: "🚀", x: rx, y: h + 30, vx: 0, vy: -6.5, size: 34,
+      life: 0, maxLife: 40, gravity: 0, fade: false, isRocket: true, targetY: h * 0.3,
+    });
+  }
+
+  if (!celebRunning) { celebRunning = true; requestAnimationFrame(stepParticles); }
+}
+
+function stepParticles() {
+  celebCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  particles = particles.filter(p => p.life < p.maxLife && p.y < window.innerHeight + 60);
+
+  particles.forEach(p => {
+    p.life++;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += p.gravity || 0;
+    if (p.sway !== undefined) { p.sway += 0.05; p.x += Math.sin(p.sway) * 0.6; }
+    if (p.rot !== undefined) p.rot += p.rotSpeed;
+
+    if (p.isRocket && p.y <= p.targetY) {
+      spawnBurst(p.x, p.y, 36);
+      p.life = p.maxLife; // remove rocket, burst particles take over
+      return;
+    }
+
+    let alpha = 1;
+    if (p.fade) alpha = Math.max(0, 1 - p.life / p.maxLife);
+    if (p.twinkle) alpha = Math.abs(Math.sin(p.life * 0.15));
+
+    celebCtx.save();
+    celebCtx.globalAlpha = alpha;
+    if (p.shape === "circle") {
+      celebCtx.fillStyle = p.color;
+      celebCtx.beginPath();
+      celebCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      celebCtx.fill();
+    } else if (p.shape === "rect") {
+      celebCtx.translate(p.x, p.y);
+      celebCtx.rotate(p.rot || 0);
+      celebCtx.fillStyle = p.color;
+      celebCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+    } else if (p.shape === "emoji") {
+      celebCtx.font = `${p.size}px sans-serif`;
+      celebCtx.textAlign = "center";
+      celebCtx.textBaseline = "middle";
+      celebCtx.fillText(p.text, p.x, p.y);
+    }
+    celebCtx.restore();
+  });
+
+  if (particles.length) {
+    requestAnimationFrame(stepParticles);
+  } else {
+    celebRunning = false;
+    celebCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  }
 }
 
 function showGameOver() {
@@ -617,6 +801,11 @@ document.getElementById("restartBtn").addEventListener("click", restartGame);
 document.getElementById("headerRestartBtn").addEventListener("click", () => {
   if (score > 0 && !confirm("Restart the game? Your current score will be lost.")) return;
   restartGame();
+});
+
+document.getElementById("lcContinueBtn").addEventListener("click", dismissLevelComplete);
+document.getElementById("levelCompleteOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "levelCompleteOverlay") dismissLevelComplete();
 });
 
 document.getElementById("factBtn").addEventListener("click", () => {
