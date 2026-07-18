@@ -93,6 +93,7 @@
   .overlay-box { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px 24px; text-align: center;
     max-width: 340px; width: 100%; box-shadow: var(--shadow); }
   .overlay-box .go-title { font-size: 1.5rem; font-weight: 900; margin-bottom: 4px; }
+  .overlay-box .go-sub { font-size: 0.88rem; color: var(--ink-soft); font-weight: 600; }
   .overlay-box .go-score { font-size: 2.6rem; font-weight: 900; color: var(--accent); margin: 10px 0 2px; font-variant-numeric: tabular-nums; }
   .overlay-box .go-best { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 22px; }
   .overlay-box button { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 13px; padding: 14px;
@@ -173,7 +174,8 @@
 
 <div class="overlay" id="gameOverOverlay" hidden>
   <div class="overlay-box">
-    <div class="go-title">Board Full!</div>
+    <div class="go-title">Well done! 🎉</div>
+    <div class="go-sub">Want to play again?</div>
     <div class="go-score" id="finalScore">0</div>
     <div class="go-best" id="finalBestNote">Best: 0</div>
     <button id="restartBtn">Play Again</button>
