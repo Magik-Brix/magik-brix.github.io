@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Block Crush</title>
+<meta name="theme-color" content="#171522">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Block Crush">
+<style>
+  :root {
+    --bg: #171522; --surface: #211F30; --board-bg: #141220; --cell-empty: #2A2740;
+    --ink: #F3F1FA; --ink-soft: #8D89A8; --accent: #7C5CFF; --line: #322F47;
+    --shadow: 0 8px 24px rgba(0,0,0,0.45);
+    --cell: min(10.5vw, 42px);
+    --gap: max(2px, calc(var(--cell) * 0.06));
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #EFEDF6; --surface: #FFFFFF; --board-bg: #E4E1F2; --cell-empty: #D6D2EA;
+      --ink: #1B1830; --ink-soft: #6B6785; --line: #C9C4E0; --shadow: 0 8px 24px rgba(40,30,70,0.14); }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: none; }
+  html, body { margin: 0; padding: 0; overscroll-behavior: none; }
+  body { background: var(--bg); color: var(--ink); font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex; justify-content: center; }
+  .wrap { max-width: 480px; width: 100%; padding: 16px 14px 30px; min-height: 100vh; display: flex; flex-direction: column; }
+
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  header .title { display: flex; align-items: center; gap: 8px; }
+  header .title .logo { font-size: 1.6rem; }
+  header h1 { font-size: 1.3rem; margin: 0; font-weight: 900; letter-spacing: -0.01em; }
+  .score-pills { display: flex; gap: 8px; }
+  .pill { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; text-align: center; min-width: 62px; }
+  .pill .pill-label { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+  .pill .pill-value { font-size: 1.05rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .pill-level { background: linear-gradient(135deg, var(--accent), #B99CFF); border-color: transparent; }
+  .pill-level .pill-label, .pill-level .pill-value { color: #fff; }
+
+  .level-progress-track { height: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+    overflow: hidden; margin: 10px 2px 0; }
+  .level-progress-fill { height: 100%; background: var(--accent); border-radius: 999px; width: 0%; transition: width 0.3s ease; }
+
+  .level-up-toast { position: fixed; top: 14%; left: 50%; transform: translate(-50%, -20px); background: var(--accent);
+    color: #fff; font-weight: 900; font-size: 1.15rem; padding: 14px 26px; border-radius: 16px; box-shadow: var(--shadow);
+    z-index: 90; opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease; text-align: center; pointer-events: none; }
+  .level-up-toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .level-up-toast .sub { display: block; font-size: 0.7rem; font-weight: 700; opacity: 0.85; margin-top: 2px; }
+
+  .board-wrap { position: relative; margin: 14px auto 18px; }
+  #board {
+    display: grid; grid-template-columns: repeat(8, var(--cell)); grid-template-rows: repeat(8, var(--cell));
+    gap: var(--gap); background: var(--board-bg); padding: calc(var(--gap) * 2); border-radius: 16px; box-shadow: var(--shadow);
+  }
+  .cell { width: var(--cell); height: var(--cell); border-radius: calc(var(--cell) * 0.18); background: var(--cell-empty);
+    position: relative; transition: background 0.08s; }
+  .cell.filled { box-shadow: inset 0 -3px 0 rgba(0,0,0,0.22), inset 0 2px 0 rgba(255,255,255,0.28); }
+  .cell.ghost-ok { background: rgba(124,92,255,0.35); }
+  .cell.ghost-bad { background: rgba(255,93,93,0.30); }
+  .cell.clearing { animation: cellClear 0.32s ease forwards; }
+  @keyframes cellClear { to { transform: scale(0.25); opacity: 0; } }
+
+  .tray {
+    display: flex; justify-content: space-around; align-items: center; gap: 6px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 16px; padding: 12px 8px; box-shadow: var(--shadow); min-height: calc(var(--cell) * 3 + 24px);
+  }
+  .tray-slot { display: grid; gap: calc(var(--gap) * 0.8); position: relative; min-height: calc(var(--cell) * 2); align-content: center; justify-content: center; }
+  .tray-slot.empty-slot { opacity: 0.25; }
+  .tray-block { width: calc(var(--cell) * 0.62); height: calc(var(--cell) * 0.62); border-radius: calc(var(--cell) * 0.12); }
+  .piece-cell { border-radius: calc(var(--cell) * 0.18); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.22), inset 0 2px 0 rgba(255,255,255,0.28); }
+
+  .drag-ghost { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 60; display: grid; opacity: 0.96; }
+
+  .footer-note { text-align: center; color: var(--ink-soft); font-size: 0.72rem; margin-top: auto; padding-top: 18px; line-height: 1.6; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(10,8,20,0.78); display: flex; align-items: center; justify-content: center;
+    padding: 20px; z-index: 80; }
+  .overlay[hidden] { display: none; }
+  .overlay-box { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px 24px; text-align: center;
+    max-width: 340px; width: 100%; box-shadow: var(--shadow); }
+  .overlay-box .go-title { font-size: 1.5rem; font-weight: 900; margin-bottom: 4px; }
+  .overlay-box .go-score { font-size: 2.6rem; font-weight: 900; color: var(--accent); margin: 10px 0 2px; font-variant-numeric: tabular-nums; }
+  .overlay-box .go-best { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 22px; }
+  .overlay-box button { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 13px; padding: 14px;
+    font-size: 1rem; font-weight: 800; cursor: pointer; font-family: inherit; }
+
+  .floater { position: absolute; font-weight: 900; font-size: 1.1rem; color: var(--accent); pointer-events: none;
+    animation: floatUp 0.9s ease forwards; z-index: 40; }
+  @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-38px); opacity: 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cell.clearing { animation: none; } .floater { animation: none; display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="title"><span class="logo">🧩</span><h1>Block Crush</h1></div>
+    <div class="score-pills">
+      <div class="pill pill-level"><div class="pill-label">Level</div><div class="pill-value" id="levelVal">1</div></div>
+      <div class="pill"><div class="pill-label">Score</div><div class="pill-value" id="scoreVal">0</div></div>
+      <div class="pill"><div class="pill-label">Best</div><div class="pill-value" id="bestVal">0</div></div>
+    </div>
+  </header>
+  <div class="level-progress-track"><div class="level-progress-fill" id="levelProgressFill"></div></div>
+
+  <div class="board-wrap">
+    <div id="board"></div>
+  </div>
+
+  <div class="tray" id="tray"></div>
+
+  <div class="footer-note">Drag a piece onto the board. Fill a full row or column to crush it. Game ends when no piece fits.
+    <br>200 levels to climb. No adverts — not now, not ever.</div>
+</div>
+
+<div class="overlay" id="gameOverOverlay" hidden>
+  <div class="overlay-box">
+    <div class="go-title">Board Full!</div>
+    <div class="go-score" id="finalScore">0</div>
+    <div class="go-best" id="finalBestNote">Best: 0</div>
+    <button id="restartBtn">Play Again</button>
+  </div>
+</div>
+
+<div class="level-up-toast" id="levelUpToast"></div>
+
+<script>
+const GRID = 8;
+const COLORS = ["#FF5D5D", "#FF9F43", "#FFD93D", "#6BCB77", "#4D96FF", "#9B5DE5", "#F15BB5", "#00C2CB"];
+const SHAPES = [
+  [[0,0]],
+  [[0,0],[0,1]], [[0,0],[1,0]],
+  [[0,0],[0,1],[0,2]], [[0,0],[1,0],[2,0]],
+  [[0,0],[0,1],[0,2],[0,3]], [[0,0],[1,0],[2,0],[3,0]],
+  [[0,0],[0,1],[0,2],[0,3],[0,4]], [[0,0],[1,0],[2,0],[3,0],[4,0]],
+  [[0,0],[0,1],[1,0],[1,1]],
+  [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]],
+  [[0,0],[1,0],[1,1]], [[0,0],[0,1],[1,0]], [[0,1],[1,0],[1,1]], [[0,0],[0,1],[1,1]],
+  [[0,0],[1,0],[2,0],[2,1]], [[0,1],[1,1],[2,1],[2,0]], [[0,0],[0,1],[1,0],[2,0]], [[0,0],[0,1],[1,1],[2,1]],
+  [[2,0],[2,1],[2,2],[1,2]], [[2,0],[2,1],[2,2],[1,0]], [[0,0],[0,1],[0,2],[1,2]], [[0,0],[0,1],[0,2],[1,0]],
+  [[0,1],[1,0],[1,1],[1,2]], [[0,1],[1,0],[1,1],[2,1]],
+  [[0,0],[1,0],[1,1],[2,1]], [[0,1],[1,0],[1,1],[2,0]],
+  [[0,0],[0,1],[1,1],[1,2]], [[0,1],[0,2],[1,0],[1,1]],
+  [[1,0],[1,1],[1,2],[0,1],[2,1]],
+];
+
+let board = []; // GRID x GRID, null or color
+let tray = []; // [{shape, color, id}, null, null]
+let score = 0;
+let best = Number(localStorage.getItem("blockCrushBest") || 0);
+const MAX_LEVEL = 200;
+const LEVEL_STEP = 120; // score points needed per level
+let currentLevel = 1;
+let dragState = null;
+
+const $ = id => document.getElementById(id);
+const boardEl = $("board");
+const trayEl = $("tray");
+
+function initBoard() {
+  board = Array.from({ length: GRID }, () => Array(GRID).fill(null));
+  boardEl.innerHTML = "";
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.dataset.r = r; cell.dataset.c = c;
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+function cellEl(r, c) { return boardEl.children[r * GRID + c]; }
+
+function renderBoard() {
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const el = cellEl(r, c);
+      el.classList.remove("ghost-ok", "ghost-bad");
+      if (board[r][c]) { el.classList.add("filled"); el.style.background = board[r][c]; }
+      else { el.classList.remove("filled"); el.style.background = ""; }
+    }
+  }
+}
+
+function randomShape() {
+  const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  return { shape, color, id: Math.random().toString(36).slice(2) };
+}
+
+function shapeBounds(shape) {
+  const rows = Math.max(...shape.map(([r]) => r)) + 1;
+  const cols = Math.max(...shape.map(([,c]) => c)) + 1;
+  return { rows, cols };
+}
+
+function refillTrayIfEmpty() {
+  if (tray.every(p => p === null)) {
+    tray = [randomShape(), randomShape(), randomShape()];
+  }
+}
+
+function canPlace(shape, baseR, baseC) {
+  for (const [dr, dc] of shape) {
+    const r = baseR + dr, c = baseC + dc;
+    if (r < 0 || r >= GRID || c < 0 || c >= GRID) return false;
+    if (board[r][c]) return false;
+  }
+  return true;
+}
+
+function anyPlacement(shape) {
+  for (let r = 0; r < GRID; r++) for (let c = 0; c < GRID; c++) if (canPlace(shape, r, c)) return true;
+  return false;
+}
+
+function checkGameOver() {
+  const alive = tray.some(p => p && anyPlacement(p.shape));
+  if (!alive) showGameOver();
+}
+
+function placePiece(piece, baseR, baseC) {
+  piece.shape.forEach(([dr, dc]) => { board[baseR + dr][baseC + dc] = piece.color; });
+  score += piece.shape.length;
+  clearLines(baseR, baseC);
+  renderBoard();
+  updateScoreUI();
+}
+
+function clearLines(originR, originC) {
+  const fullRows = [];
+  const fullCols = [];
+  for (let r = 0; r < GRID; r++) if (board[r].every(v => v)) fullRows.push(r);
+  for (let c = 0; c < GRID; c++) if (board.every(row => row[c])) fullCols.push(c);
+  if (!fullRows.length && !fullCols.length) return;
+
+  const cellsToClear = new Set();
+  fullRows.forEach(r => { for (let c = 0; c < GRID; c++) cellsToClear.add(r + "," + c); });
+  fullCols.forEach(c => { for (let r = 0; r < GRID; r++) cellsToClear.add(r + "," + c); });
+
+  cellsToClear.forEach(key => {
+    const [r, c] = key.split(",").map(Number);
+    cellEl(r, c).classList.add("clearing");
+  });
+
+  const linesCleared = fullRows.length + fullCols.length;
+  const bonus = cellsToClear.size * 10 * linesCleared;
+  score += bonus;
+  spawnFloater(bonus, originR, originC);
+
+  setTimeout(() => {
+    cellsToClear.forEach(key => {
+      const [r, c] = key.split(",").map(Number);
+      board[r][c] = null;
+      cellEl(r, c).classList.remove("clearing");
+    });
+    renderBoard();
+    updateScoreUI();
+  }, 320);
+}
+
+function spawnFloater(amount, r, c) {
+  const el = document.createElement("div");
+  el.className = "floater";
+  el.textContent = "+" + amount;
+  const cellRect = cellEl(Math.min(r, GRID-1), Math.min(c, GRID-1)).getBoundingClientRect();
+  const boardRect = $("board").getBoundingClientRect();
+  el.style.left = (cellRect.left - boardRect.left) + "px";
+  el.style.top = (cellRect.top - boardRect.top) + "px";
+  $("board").parentElement.style.position = "relative";
+  document.querySelector(".board-wrap").appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
+
+function levelForScore(s) {
+  return Math.min(MAX_LEVEL, Math.floor(s / LEVEL_STEP) + 1);
+}
+
+function updateScoreUI() {
+  $("scoreVal").textContent = score;
+  if (score > best) { best = score; localStorage.setItem("blockCrushBest", String(best)); }
+  $("bestVal").textContent = best;
+
+  const newLevel = levelForScore(score);
+  if (newLevel > currentLevel) {
+    currentLevel = newLevel;
+    showLevelUpToast(currentLevel);
+  }
+  $("levelVal").textContent = currentLevel;
+
+  const intoLevel = score - (currentLevel - 1) * LEVEL_STEP;
+  const pct = currentLevel >= MAX_LEVEL ? 100 : Math.min(100, (intoLevel / LEVEL_STEP) * 100);
+  $("levelProgressFill").style.width = pct + "%";
+}
+
+let levelUpTimer = null;
+function showLevelUpToast(level) {
+  const toast = $("levelUpToast");
+  toast.innerHTML = level >= MAX_LEVEL
+    ? `Level ${level}! You reached the top! 🏆<span class="sub">Keep playing for an even bigger score</span>`
+    : `Level ${level}! 🎉`;
+  toast.classList.add("show");
+  clearTimeout(levelUpTimer);
+  levelUpTimer = setTimeout(() => toast.classList.remove("show"), 1400);
+}
+
+function showGameOver() {
+  $("finalScore").textContent = score;
+  $("finalBestNote").textContent = `Best: ${best} · Reached Level ${currentLevel}`;
+  $("gameOverOverlay").hidden = false;
+}
+
+function restartGame() {
+  score = 0;
+  currentLevel = 1;
+  initBoard();
+  tray = [null, null, null];
+  refillTrayIfEmpty();
+  renderBoard();
+  renderTray();
+  updateScoreUI();
+  $("gameOverOverlay").hidden = true;
+}
+
+// ---- Tray rendering ----
+function renderTray() {
+  trayEl.innerHTML = "";
+  tray.forEach((piece, idx) => {
+    const slot = document.createElement("div");
+    slot.className = "tray-slot" + (piece ? "" : " empty-slot");
+    slot.dataset.idx = idx;
+    if (piece) {
+      const { rows, cols } = shapeBounds(piece.shape);
+      slot.style.gridTemplateColumns = `repeat(${cols}, calc(var(--cell) * 0.62))`;
+      slot.style.gridTemplateRows = `repeat(${rows}, calc(var(--cell) * 0.62))`;
+      const grid = Array.from({ length: rows * cols }, () => null);
+      piece.shape.forEach(([r, c]) => { grid[r * cols + c] = true; });
+      grid.forEach((filled) => {
+        const b = document.createElement("div");
+        if (filled) { b.className = "tray-block piece-cell"; b.style.background = piece.color; }
+        slot.appendChild(b);
+      });
+      slot.addEventListener("pointerdown", (ev) => startDrag(ev, piece, idx, slot));
+    }
+    trayEl.appendChild(slot);
+  });
+}
+
+// ---- Drag & drop (pointer events, mouse + touch) ----
+function startDrag(ev, piece, trayIdx, slotEl) {
+  ev.preventDefault();
+  const sampleRect = cellEl(0, 0).getBoundingClientRect();
+  const sampleRect2 = cellEl(0, 1).getBoundingClientRect();
+  const cellPx = sampleRect.width;
+  const gapPx = Math.max(0, sampleRect2.left - sampleRect.right);
+  const { rows, cols } = shapeBounds(piece.shape);
+
+  const ghost = document.createElement("div");
+  ghost.className = "drag-ghost";
+  ghost.style.gridTemplateColumns = `repeat(${cols}, ${cellPx}px)`;
+  ghost.style.gridTemplateRows = `repeat(${rows}, ${cellPx}px)`;
+  ghost.style.gap = gapPx + "px";
+  const grid = Array.from({ length: rows * cols }, () => null);
+  piece.shape.forEach(([r, c]) => { grid[r * cols + c] = true; });
+  grid.forEach((filled) => {
+    const b = document.createElement("div");
+    if (filled) { b.style.width = cellPx + "px"; b.style.height = cellPx + "px"; b.style.borderRadius = (cellPx*0.18)+"px";
+      b.style.background = piece.color; b.style.boxShadow = "inset 0 -3px 0 rgba(0,0,0,0.22), inset 0 2px 0 rgba(255,255,255,0.28)"; }
+    ghost.appendChild(b);
+  });
+  document.body.appendChild(ghost);
+
+  const yOffset = 70; // lift piece above finger so it's visible on mobile
+  const halfW = (cols * (cellPx + gapPx)) / 2;
+  const halfH = (rows * (cellPx + gapPx)) / 2;
+
+  dragState = { piece, trayIdx, slotEl, ghost, cellPx, gapPx, rows, cols, halfW, halfH, yOffset, lastGhostCells: [] };
+  slotEl.style.visibility = "hidden";
+  positionGhost(ev.clientX, ev.clientY);
+  updateBoardGhost(ev.clientX, ev.clientY);
+
+  window.addEventListener("pointermove", onDragMove);
+  window.addEventListener("pointerup", onDragEnd);
+}
+
+function positionGhost(x, y) {
+  const { ghost, halfW, halfH, yOffset } = dragState;
+  ghost.style.left = (x - halfW) + "px";
+  ghost.style.top = (y - halfH - yOffset) + "px";
+}
+
+function boardOriginFromPointer(x, y) {
+  const boardRect = boardEl.getBoundingClientRect();
+  const { cellPx, gapPx, rows, cols, yOffset } = dragState;
+  const anchorX = x - dragState.halfW;
+  const anchorY = y - dragState.halfH - yOffset;
+  const col = Math.round((anchorX - boardRect.left) / (cellPx + gapPx));
+  const row = Math.round((anchorY - boardRect.top) / (cellPx + gapPx));
+  return { row, col };
+}
+
+function updateBoardGhost(x, y) {
+  clearBoardGhost();
+  const { piece } = dragState;
+  const { row, col } = boardOriginFromPointer(x, y);
+  const valid = canPlace(piece.shape, row, col);
+  const cells = [];
+  piece.shape.forEach(([dr, dc]) => {
+    const r = row + dr, c = col + dc;
+    if (r >= 0 && r < GRID && c >= 0 && c < GRID) {
+      cellEl(r, c).classList.add(valid ? "ghost-ok" : "ghost-bad");
+      cells.push([r, c]);
+    }
+  });
+  dragState.lastGhostCells = cells;
+  dragState.lastValid = valid;
+  dragState.lastRow = row; dragState.lastCol = col;
+}
+
+function clearBoardGhost() {
+  if (!dragState) return;
+  dragState.lastGhostCells.forEach(([r, c]) => cellEl(r, c).classList.remove("ghost-ok", "ghost-bad"));
+}
+
+function onDragMove(ev) {
+  if (!dragState) return;
+  positionGhost(ev.clientX, ev.clientY);
+  updateBoardGhost(ev.clientX, ev.clientY);
+}
+
+function onDragEnd(ev) {
+  if (!dragState) return;
+  window.removeEventListener("pointermove", onDragMove);
+  window.removeEventListener("pointerup", onDragEnd);
+  clearBoardGhost();
+  const { piece, trayIdx, slotEl, ghost, lastValid, lastRow, lastCol } = dragState;
+  ghost.remove();
+  slotEl.style.visibility = "";
+
+  if (lastValid) {
+    placePiece(piece, lastRow, lastCol);
+    tray[trayIdx] = null;
+    refillTrayIfEmpty();
+    renderTray();
+    checkGameOver();
+  }
+  dragState = null;
+}
+
+document.getElementById("restartBtn").addEventListener("click", restartGame);
+
+// ---- Init ----
+initBoard();
+tray = [null, null, null];
+refillTrayIfEmpty();
+renderBoard();
+renderTray();
+updateScoreUI();
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js", { scope: "/block-crush/" }).catch(() => {});
+}
+</script>
+</body>
+</html>
