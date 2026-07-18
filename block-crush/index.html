@@ -95,6 +95,10 @@
   @media (prefers-reduced-motion: reduce) {
     .cell.clearing { animation: none; } .floater { animation: none; display: none; }
   }
+
+  .restart-btn { background: var(--surface); border: 1px solid var(--line); color: var(--ink-soft); font-size: 1.1rem;
+    width: 38px; height: 38px; border-radius: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -106,6 +110,7 @@
       <div class="pill pill-level"><div class="pill-label">Level</div><div class="pill-value" id="levelVal">1</div></div>
       <div class="pill"><div class="pill-label">Score</div><div class="pill-value" id="scoreVal">0</div></div>
       <div class="pill"><div class="pill-label">Best</div><div class="pill-value" id="bestVal">0</div></div>
+      <button class="restart-btn" id="headerRestartBtn" title="Restart" aria-label="Restart game">🔄</button>
     </div>
   </header>
   <div class="level-progress-track"><div class="level-progress-fill" id="levelProgressFill"></div></div>
@@ -456,6 +461,10 @@ function onDragEnd(ev) {
 }
 
 document.getElementById("restartBtn").addEventListener("click", restartGame);
+document.getElementById("headerRestartBtn").addEventListener("click", () => {
+  if (score > 0 && !confirm("Restart the game? Your current score will be lost.")) return;
+  restartGame();
+});
 
 // ---- Init ----
 initBoard();
